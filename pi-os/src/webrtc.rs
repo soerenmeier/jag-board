@@ -4,54 +4,49 @@ use twcc_interceptor::TwccInterceptor;
 
 use crate::camera::Camera;
 
-use std::thread;
+use std::error::Error as StdError;
 use std::fs::{self, File};
 use std::io::{self, BufReader, Write};
-use std::time::{Instant, Duration};
 use std::path::Path;
 use std::sync::Arc;
-use std::error::Error as StdError;
+use std::thread;
+use std::time::{Duration, Instant};
 
-use tokio::sync::{Notify, mpsc};
 use tokio::runtime::Handle as RtHandle;
+use tokio::sync::{mpsc, Notify};
 
 use webrtc::api::interceptor_registry::{
-	configure_nack, configure_rtcp_reports, configure_twcc
+	configure_nack, configure_rtcp_reports, configure_twcc,
 };
 use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_H264, MIME_TYPE_OPUS};
 use webrtc::api::APIBuilder;
+use webrtc::data_channel::RTCDataChannel;
+use webrtc::ice_transport::ice_candidate::RTCIceCandidate;
 use webrtc::ice_transport::ice_connection_state::RTCIceConnectionState;
 use webrtc::ice_transport::ice_server::RTCIceServer;
-use webrtc::ice_transport::ice_candidate::RTCIceCandidate;
 use webrtc::interceptor::registry::Registry;
 use webrtc::media::io::h264_reader::H264Reader;
 use webrtc::media::io::ogg_reader::OggReader;
 pub use webrtc::media::Sample;
-use webrtc::peer_connection::RTCPeerConnection;
 use webrtc::peer_connection::configuration::RTCConfiguration;
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
-pub use webrtc::peer_connection::sdp::session_description::{
-	RTCSessionDescription as Description
-};
+pub use webrtc::peer_connection::sdp::session_description::RTCSessionDescription as Description;
+use webrtc::peer_connection::RTCPeerConnection;
 use webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
-use webrtc::track::track_local::track_local_static_sample::{
-	TrackLocalStaticSample
-};
-use webrtc::data_channel::RTCDataChannel;
-use webrtc::track::track_local::TrackLocal;
 use webrtc::stats::StatsReportType;
-
+use webrtc::track::track_local::track_local_static_sample::TrackLocalStaticSample;
+use webrtc::track::track_local::TrackLocal;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
 	#[error("webrtc error")]
-	WebrtcError(#[from] webrtc::Error)
+	WebrtcError(#[from] webrtc::Error),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum State {
 	Connected,
-	Disconnected
+	Disconnected,
 }
 
 pub struct Webrtc {}
@@ -64,7 +59,7 @@ impl Webrtc {
 	pub async fn create_connection(
 		&self,
 		desc: Description,
-		camera: Box<dyn Camera + Send>
+		camera: Box<dyn Camera + Send>,
 	) -> Result<Connection, Error> {
 		let mut m = MediaEngine::default();
 
@@ -99,12 +94,14 @@ impl Webrtc {
 				..Default::default()
 			},
 			"video".to_owned(),
-			"webrtc-rs".to_owned()
+			"webrtc-rs".to_owned(),
 		));
 
-		let rtp_sender = peer_connection.add_track(
-			Arc::clone(&video_track) as Arc<dyn TrackLocal + Send + Sync>
-		).await?;
+		let rtp_sender = peer_connection
+			.add_track(
+				Arc::clone(&video_track) as Arc<dyn TrackLocal + Send + Sync>
+			)
+			.await?;
 
 		let (state_tx, state_rx) = mpsc::channel(5);
 
@@ -116,7 +113,7 @@ impl Webrtc {
 				video_track,
 				camera_peer_connection,
 				state_rx,
-				rt_handle
+				rt_handle,
 			);
 		});
 
@@ -129,13 +126,16 @@ impl Webrtc {
 		// set the handler for ICE connection
 		peer_connection.on_ice_connection_state_change(Box::new(
 			move |connection_state: RTCIceConnectionState| {
-				eprintln!("ice connection state changed {:?}", connection_state);
+				eprintln!(
+					"ice connection state changed {:?}",
+					connection_state
+				);
 				// if connection_state == RTCIceConnectionState::Connected {
 				// 	notify_tx.notify_waiters();
 				// }
 
 				Box::pin(async {})
-			}
+			},
 		));
 
 		peer_connection.on_ice_candidate(Box::new(
@@ -143,36 +143,38 @@ impl Webrtc {
 				eprintln!("ice candidate update {:?}", c);
 
 				Box::pin(async {})
-			}
+			},
 		));
 
-		peer_connection.on_peer_connection_state_change(
-			Box::new(move |s: RTCPeerConnectionState| {
+		peer_connection.on_peer_connection_state_change(Box::new(
+			move |s: RTCPeerConnectionState| {
 				eprintln!("peer connection state change {:?}", s);
 
 				match s {
 					RTCPeerConnectionState::Connected => {
 						let _ = state_tx.try_send(State::Connected);
-					},
-					RTCPeerConnectionState::Disconnected |
-					RTCPeerConnectionState::Failed |
-					RTCPeerConnectionState::Closed => {
+					}
+					RTCPeerConnectionState::Disconnected
+					| RTCPeerConnectionState::Failed
+					| RTCPeerConnectionState::Closed => {
 						let _ = state_tx.try_send(State::Disconnected);
-					},
+					}
 					_ => {}
 				}
 
 				Box::pin(async {})
-			})
-		);
+			},
+		));
 
-		peer_connection.on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
-			let d_label = d.label().to_owned();
-			let d_id = d.id();
-			println!("New DataChannel {} {}", d_label, d_id);
+		peer_connection.on_data_channel(Box::new(
+			move |d: Arc<RTCDataChannel>| {
+				let d_label = d.label().to_owned();
+				let d_id = d.id();
+				println!("New DataChannel {} {}", d_label, d_id);
 
-			Box::pin(async {})
-		}));
+				Box::pin(async {})
+			},
+		));
 
 		peer_connection.set_remote_description(desc).await?;
 
@@ -185,7 +187,7 @@ impl Webrtc {
 }
 
 pub struct Connection {
-	peer_connection: Arc<RTCPeerConnection>
+	peer_connection: Arc<RTCPeerConnection>,
 }
 
 impl Connection {
@@ -206,15 +208,13 @@ fn camera_thread(
 	track: Arc<TrackLocalStaticSample>,
 	peer_connection: Arc<RTCPeerConnection>,
 	mut state_rx: mpsc::Receiver<State>,
-	rt: RtHandle
+	rt: RtHandle,
 ) {
 	// let's wait until the connection is established
 	match state_rx.blocking_recv() {
-		Some(State::Connected) => {},
-		Some(State::Disconnected) |
-		None => return
+		Some(State::Connected) => {}
+		Some(State::Disconnected) | None => return,
 	};
-
 
 	let mut gather_stats_in = 0;
 	let mut stats;
@@ -248,8 +248,8 @@ fn camera_thread(
 		// check if the connection already closed
 		match state_rx.try_recv() {
 			Ok(State::Connected) => unreachable!(),
-			Ok(State::Disconnected) |
-			Err(mpsc::error::TryRecvError::Disconnected) => return,
+			Ok(State::Disconnected)
+			| Err(mpsc::error::TryRecvError::Disconnected) => return,
 			Err(mpsc::error::TryRecvError::Empty) => {}
 		}
 
@@ -259,7 +259,7 @@ fn camera_thread(
 			Err(e) => {
 				// should we close the track??
 				eprintln!("camera closed {:?}", e);
-				return
+				return;
 			}
 		};
 		eprintln!(
@@ -271,22 +271,21 @@ fn camera_thread(
 
 		if let Err(e) = rt.block_on(track.write_sample(&sample)) {
 			eprintln!("could not write sample {:?}", e);
-			return
+			return;
 		}
 	}
 }
 
-
 const FRAME_DURATION: Duration = Duration::from_millis(1000 / 30);
 
 struct FrameTicks {
-	last_tick: Instant
+	last_tick: Instant,
 }
 
 impl FrameTicks {
 	fn new() -> Self {
 		Self {
-			last_tick: Instant::now()
+			last_tick: Instant::now(),
 		}
 	}
 
@@ -297,12 +296,12 @@ impl FrameTicks {
 		if elapsed < FRAME_DURATION {
 			thread::sleep(FRAME_DURATION - elapsed);
 			self.last_tick = Instant::now();
-			return 0
+			return 0;
 		}
 
-		let ticks_passed = (
-			elapsed.as_secs_f64() / FRAME_DURATION.as_secs_f64()
-		).floor() as u32;
+		let ticks_passed = (elapsed.as_secs_f64()
+			/ FRAME_DURATION.as_secs_f64())
+		.floor() as u32;
 		elapsed -= FRAME_DURATION * ticks_passed;
 		thread::sleep(FRAME_DURATION - elapsed);
 		self.last_tick = Instant::now();

@@ -2,12 +2,11 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-use webrtc::interceptor::{
-	Error, Interceptor, InterceptorBuilder, RTCPReader, RTCPWriter, RTPReader,
-	RTPWriter, Attributes
-};
 use webrtc::interceptor::stream_info::StreamInfo;
-
+use webrtc::interceptor::{
+	Attributes, Error, Interceptor, InterceptorBuilder, RTCPReader, RTCPWriter,
+	RTPReader, RTPWriter,
+};
 
 #[derive(Debug)]
 pub struct TwccInterceptorBuilder;
@@ -15,7 +14,7 @@ pub struct TwccInterceptorBuilder;
 impl InterceptorBuilder for TwccInterceptorBuilder {
 	fn build(
 		&self,
-		id: &str
+		id: &str,
 	) -> Result<Arc<dyn Interceptor + Send + Sync>, Error> {
 		Ok(Arc::new(TwccInterceptor))
 	}
@@ -37,7 +36,7 @@ impl Interceptor for TwccInterceptor {
 		reader: Arc<dyn RTCPReader + Send + Sync>,
 	) -> Arc<dyn RTCPReader + Send + Sync> {
 		Arc::new(TwccInterceptorRtcpReader {
-			parent_reader: reader
+			parent_reader: reader,
 		})
 	}
 
@@ -76,7 +75,7 @@ impl Interceptor for TwccInterceptor {
 }
 
 pub struct TwccInterceptorRtcpReader {
-	parent_reader: Arc<dyn RTCPReader + Send + Sync>
+	parent_reader: Arc<dyn RTCPReader + Send + Sync>,
 }
 
 #[async_trait]
@@ -84,7 +83,7 @@ impl RTCPReader for TwccInterceptorRtcpReader {
 	async fn read(
 		&self,
 		buf: &mut [u8],
-		a: &Attributes
+		a: &Attributes,
 	) -> Result<(usize, Attributes), Error> {
 		let (n, attr) = self.parent_reader.read(buf, a).await?;
 
@@ -98,7 +97,7 @@ impl RTCPReader for TwccInterceptorRtcpReader {
 }
 
 pub struct TwccInterceptorRtpReader {
-	parent_reader: Arc<dyn RTPReader + Send + Sync>
+	parent_reader: Arc<dyn RTPReader + Send + Sync>,
 }
 
 #[async_trait]
@@ -107,7 +106,7 @@ impl RTPReader for ReceiverStream {
 	async fn read(
 		&self,
 		buf: &mut [u8],
-		a: &Attributes
+		a: &Attributes,
 	) -> Result<(usize, Attributes)> {
 		let (n, attr) = self.parent_reader.read(buf, a).await?;
 

@@ -6,9 +6,8 @@ use std::io::BufReader;
 
 use webrtc::media::io::h264_reader::H264Reader;
 
-
 pub struct FileCamera {
-	reader: H264Reader<BufReader<File>>
+	reader: H264Reader<BufReader<File>>,
 }
 
 impl FileCamera {
@@ -26,7 +25,7 @@ impl Camera for FileCamera {
 			Ok(n) => n,
 			Err(e) => {
 				eprintln!("failed to read nal probably file streamed {:?}", e);
-				return Err(CameraError::Disconnected)
+				return Err(CameraError::Disconnected);
 			}
 		};
 

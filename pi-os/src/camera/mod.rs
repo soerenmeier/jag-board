@@ -4,11 +4,10 @@ pub use file::FileCamera;
 
 use crate::webrtc::Sample;
 
-
 #[derive(Debug, thiserror::Error)]
 pub enum CameraError {
 	#[error("Camera was disconnected")]
-	Disconnected
+	Disconnected,
 }
 
 pub trait Camera {

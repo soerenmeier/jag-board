@@ -1,5 +1,5 @@
-mod webrtc;
 mod camera;
+mod webrtc;
 
 use crate::webrtc::Description;
 use camera::FileCamera;
@@ -18,7 +18,10 @@ async fn main() {
 
 	let webrtc = crate::webrtc::Webrtc::new();
 	let camera = FileCamera::new("./h264.h264");
-	let con = webrtc.create_connection(offer, Box::new(camera)).await.unwrap();
+	let con = webrtc
+		.create_connection(offer, Box::new(camera))
+		.await
+		.unwrap();
 
 	eprintln!("connection created");
 
