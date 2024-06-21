@@ -1,0 +1,15 @@
+[package]
+name = "pcb-generator"
+version = "0.1.0"
+edition = "2021"
+
+[profile.release]
+lto = true
+
+[dependencies]
+clap = { version = "4.0", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+csv = "1.1"
+reqwest = { version = "0.11", features = ["blocking"] }
+encoding_rs_io = "0.1"
+encoding_rs = "0.8"

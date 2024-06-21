@@ -1,0 +1,16 @@
+[package]
+name = "pi-os"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+webrtc = "0.6"
+tokio = { version = "1.0", features = ["rt-multi-thread", "macros"] }
+serde_json = "1.0"
+base64 = "0.13.0"
+thiserror = "1.0"
+env_logger = "0.10"
+async-trait = "0.1"
+
+# Testing Video https://jsfiddle.net/9s10amwL/
+# Datachannel https://jsfiddle.net/9tsx15mg/90/
